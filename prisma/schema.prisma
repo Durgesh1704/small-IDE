@@ -1,0 +1,211 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id              String   @id @default(cuid())
+  email           String   @unique
+  username        String?
+  name            String?
+  walletAddress   String?  @unique
+  role            UserRole @default(INDIVIDUAL)
+  avatar          String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  activities      Activity[]
+  carbonCredits   CarbonCredit[]
+  marketplaceOrders MarketplaceOrder[]
+  badges          UserBadge[]
+  leaderboard     Leaderboard?
+
+  @@map("users")
+}
+
+model Activity {
+  id              String        @id @default(cuid())
+  userId          String
+  type            ActivityType
+  location        String?       // JSON string with lat/lng
+  carbonOffset    Float         // in tons CO2
+  verificationStatus VerificationStatus @default(PENDING)
+  blockchainTxId  String?
+  metadata        String?       // JSON string for additional data
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  // Relations
+  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  carbonCredits   CarbonCredit[]
+  verification    Verification?
+
+  @@map("activities")
+}
+
+model CarbonCredit {
+  id              String           @id @default(cuid())
+  userId          String
+  activityId      String?
+  tokenId         String?          // Blockchain token ID
+  amount          Float            // in tons CO2
+  status          CreditStatus     @default(ACTIVE)
+  price           Float?           // For marketplace listings
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  // Relations
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  activity        Activity?        @relation(fields: [activityId], references: [id])
+  marketplaceOrders MarketplaceOrder[]
+
+  @@map("carbon_credits")
+}
+
+model Verification {
+  id              String           @id @default(cuid())
+  activityId      String           @unique
+  verifierId      String
+  status          VerificationStatus
+  proof           String?          // IPFS hash or other proof
+  notes           String?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  // Relations
+  activity        Activity         @relation(fields: [activityId], references: [id], onDelete: Cascade)
+
+  @@map("verifications")
+}
+
+model Badge {
+  id              String           @id @default(cuid())
+  name            String
+  description     String
+  icon            String?
+  category        BadgeCategory
+  criteria        String           // JSON string with requirements
+  createdAt       DateTime         @default(now())
+
+  // Relations
+  userBadges      UserBadge[]
+
+  @@map("badges")
+}
+
+model UserBadge {
+  id              String           @id @default(cuid())
+  userId          String
+  badgeId         String
+  earnedAt        DateTime         @default(now())
+
+  // Relations
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  badge           Badge            @relation(fields: [badgeId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, badgeId])
+  @@map("user_badges")
+}
+
+model MarketplaceOrder {
+  id              String           @id @default(cuid())
+  userId          String
+  carbonCreditId  String
+  type            OrderType
+  amount          Float
+  pricePerTon     Float
+  status          OrderStatus      @default(OPEN)
+  paymentMethod   String?          // e.g., "USDC", "ETH", "FIAT"
+  buyerId         String?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  // Relations
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  carbonCredit    CarbonCredit     @relation(fields: [carbonCreditId], references: [id], onDelete: Cascade)
+
+  @@map("marketplace_orders")
+}
+
+model Leaderboard {
+  id              String           @id @default(cuid())
+  userId          String           @unique
+  treesPlanted    Int              @default(0)
+  plasticRecycled Float            @default(0) // in kg
+  totalCarbonOffset Float          @default(0) // in tons CO2
+  impactScore     Int              @default(0)
+  rank            Int?
+  period          LeaderboardPeriod @default(ALL_TIME)
+  lastUpdated     DateTime         @default(now())
+
+  // Relations
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("leaderboard")
+}
+
+// Enums
+enum UserRole {
+  INDIVIDUAL
+  CORPORATE
+  VERIFIER
+  ADMIN
+}
+
+enum ActivityType {
+  TREE_PLANTING
+  PLASTIC_RECYCLING
+  RENEWABLE_ENERGY
+  ENERGY_CONSERVATION
+  SUSTAINABLE_TRANSPORT
+}
+
+enum VerificationStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+  UNDER_REVIEW
+}
+
+enum CreditStatus {
+  ACTIVE
+  FOR_SALE
+  SOLD
+  RETIRED
+  TRANSFERRED
+}
+
+enum BadgeCategory {
+  RECYCLING
+  TREE_PLANTING
+  CARBON_OFFSET
+  COMMUNITY
+  MILESTONE
+}
+
+enum OrderType {
+  BUY
+  SELL
+}
+
+enum OrderStatus {
+  OPEN
+  FILLED
+  CANCELLED
+  PENDING_PAYMENT
+}
+
+enum LeaderboardPeriod {
+  DAILY
+  WEEKLY
+  MONTHLY
+  ALL_TIME
+}
